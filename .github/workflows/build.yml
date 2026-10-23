@@ -1,0 +1,59 @@
+name: Compilar Android Go Optimizado para Pettyl
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Maximizar espacio en el Servidor
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        sudo apt-get clean
+
+    - name: Instalar Herramientas de Compilación
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.1-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 openjdk-8-jdk
+
+    - name: Configurar e Inicializar Repo
+      run: |
+        mkdir ~/bin
+        curl https://googleapis.com > ~/bin/repo
+        chmod a+x ~/bin/repo
+        export PATH=~/bin:$PATH
+        mkdir android && cd android
+        git config --global user.name "solkendelgado-dev"
+        git config --global user.email "tu-correo@ejemplo.com"
+        repo init -u https://github.com -b lineage-17.1 --depth=1
+
+    - name: Añadir Manifiesto Local (Tus Repositorios)
+      run: |
+        cd android
+        mkdir -p .repo/local_manifests
+        echo '<?xml version="1.0" encoding="UTF-8"?>
+        <manifest>
+          <project name="solkendelgado-dev/android_device_motorola_pettyl-rom" path="device/motorola/pettyl" remote="github" revision="lineage-17.1" />
+          <project name="CheckYourTech/android_vendor_motorola_pettyl" path="vendor/motorola/pettyl" remote="github" revision="android-10" />
+          <project name="CheckYourTech/android_kernel_motorola_msm8917" path="kernel/motorola/msm8917" remote="github" revision="android-10" />
+        </manifest>' > .repo/local_manifests/roomservice.xml
+
+    - name: Sincronizar Código Fuente (Descarga masiva)
+      run: |
+        export PATH=~/bin:$PATH
+        cd android
+        repo sync -c -j$(nproc) --force-sync --no-clone-bundle --no-tags
+
+    - name: Iniciar Compilación de la ROM
+      run: |
+        export PATH=~/bin:$PATH
+        cd android
+        source build/envsetup.sh
+        lunch lineage_pettyl-userdebug
+        mka bacon -j$(nproc)
+
+    - name: Subir Archivo ZIP Resultante
+      uses: actions/upload-artifact@v4
+      with:
+        name: LineageOS-10-Go-Pettyl-Optimized
+        path: android/out/target/product/pettyl/*.zip
